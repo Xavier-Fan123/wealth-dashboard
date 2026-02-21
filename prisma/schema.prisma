@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Holdings represent current positions in auto-priced assets
+model Holding {
+  id        String   @id @default(cuid())
+  entity    String   // FAMILY or COMPANY
+  asset     String   // VOO, QQQ, GLD (Gold ETF)
+  ticker    String   // Yahoo Finance ticker symbol
+  shares    Float    // Number of shares held
+  avgCost   Float    // Average cost per share in original currency
+  currency  String   // USD, SGD, CNY
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Manual assets that are not auto-priced (cash accounts, etc.)
+model ManualAsset {
+  id        String   @id @default(cuid())
+  entity    String   // FAMILY or COMPANY
+  name      String   // e.g., "Moomoo Short-term Cash", "Company Bank Balance"
+  balance   Float    // Current balance
+  currency  String   // USD, SGD, CNY
+  category  String   // CASH_EQUIVALENT, CORPORATE_CASH
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Capital flow transactions
+model Transaction {
+  id        String   @id @default(cuid())
+  date      DateTime
+  entity    String   // FAMILY or COMPANY
+  asset     String   // VOO, QQQ, GLD, Moomoo Cash, Company Bank, etc.
+  currency  String   // USD, SGD, CNY
+  amount    Float    // Dollar amount or share quantity depending on type
+  units     Float?   // Number of shares (for BUY/SELL)
+  price     Float?   // Price per unit at time of transaction
+  type      String   // BUY, SELL, DEPOSIT, WITHDRAW, TRANSFER
+  note      String?
+  createdAt DateTime @default(now())
+}

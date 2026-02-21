@@ -25,8 +25,16 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Determine which cash account to use for this currency
+  const CASH_ACCOUNT: Record<string, string> = {
+    USD: "USD Cash",
+    CNY: "CNY Cash",
+    SGD: "Company Bank Balance",
+  };
+
   // Update holdings or manual assets based on transaction type
   if (body.type === "BUY" && body.units && body.price) {
+    // 1. Increase holding
     const existing = await prisma.holding.findFirst({
       where: { entity: body.entity, ticker: body.ticker || body.asset },
     });
@@ -52,7 +60,22 @@ export async function POST(req: NextRequest) {
         },
       });
     }
+
+    // 2. Deduct cash (BUY spends cash)
+    const cashName = CASH_ACCOUNT[body.currency];
+    if (cashName) {
+      const cashAccount = await prisma.manualAsset.findFirst({
+        where: { entity: body.entity, name: cashName },
+      });
+      if (cashAccount) {
+        await prisma.manualAsset.update({
+          where: { id: cashAccount.id },
+          data: { balance: cashAccount.balance - Math.abs(body.amount) },
+        });
+      }
+    }
   } else if (body.type === "SELL" && body.units) {
+    // 1. Decrease holding
     const existing = await prisma.holding.findFirst({
       where: { entity: body.entity, ticker: body.ticker || body.asset },
     });
@@ -64,6 +87,20 @@ export async function POST(req: NextRequest) {
         await prisma.holding.update({
           where: { id: existing.id },
           data: { shares: newShares },
+        });
+      }
+    }
+
+    // 2. Add cash back (SELL receives cash)
+    const cashName = CASH_ACCOUNT[body.currency];
+    if (cashName) {
+      const cashAccount = await prisma.manualAsset.findFirst({
+        where: { entity: body.entity, name: cashName },
+      });
+      if (cashAccount) {
+        await prisma.manualAsset.update({
+          where: { id: cashAccount.id },
+          data: { balance: cashAccount.balance + Math.abs(body.amount) },
         });
       }
     }

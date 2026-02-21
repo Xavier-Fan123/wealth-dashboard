@@ -106,6 +106,8 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Dashboard API error:", error);
-    return NextResponse.json({ error: "Failed to load dashboard data" }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : "";
+    return NextResponse.json({ error: "Failed to load dashboard data", message, stack }, { status: 500 });
   }
 }

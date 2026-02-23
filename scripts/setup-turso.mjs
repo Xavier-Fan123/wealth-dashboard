@@ -61,6 +61,9 @@ const schemaStatements = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
+  // Unique constraints (CREATE INDEX IF NOT EXISTS is safe to re-run)
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Holding_entity_ticker_key" ON "Holding"("entity", "ticker")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "ManualAsset_entity_name_key" ON "ManualAsset"("entity", "name")`,
 ];
 
 const seedResetStatements = [

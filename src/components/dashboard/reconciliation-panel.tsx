@@ -4,34 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-
-interface CashMismatch {
-  id: string;
-  entity: string;
-  name: string;
-  currency: string;
-  actual: number;
-  expected: number;
-  diff: number;
-}
-
-interface HoldingMismatch {
-  entity: string;
-  ticker: string;
-  expectedShares: number;
-  actualShares: number;
-  shareDiff: number;
-  expectedAvgCost: number;
-  actualAvgCost: number;
-  avgCostDiff: number;
-}
-
-interface ReconciliationData {
-  checkedAt: string;
-  status: "ok" | "warning";
-  cashMismatches: CashMismatch[];
-  holdingMismatches: HoldingMismatch[];
-}
+import type { ReconciliationData } from "@/types/dashboard";
 
 interface ReconciliationPanelProps {
   data: ReconciliationData;

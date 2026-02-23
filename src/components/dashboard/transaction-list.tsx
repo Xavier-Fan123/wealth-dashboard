@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/utils";
+import { Undo2 } from "lucide-react";
 
 interface Transaction {
   id: string;
@@ -19,6 +22,7 @@ interface Transaction {
 
 interface TransactionListProps {
   transactions: Transaction[];
+  onVoid?: () => void;
 }
 
 const TYPE_BADGE: Record<string, "success" | "destructive" | "info" | "warning" | "default"> = {
@@ -44,7 +48,36 @@ function getAmountPrefix(type: string): string {
   return "";
 }
 
-export function TransactionList({ transactions }: TransactionListProps) {
+export function TransactionList({ transactions, onVoid }: TransactionListProps) {
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  async function handleVoid(id: string) {
+    if (confirmId !== id) {
+      setConfirmId(id);
+      return;
+    }
+    setVoidingId(id);
+    setConfirmId(null);
+    try {
+      const res = await fetch("/api/transactions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        alert(body?.error || "Failed to void transaction.");
+        return;
+      }
+      onVoid?.();
+    } catch {
+      alert("Network error while voiding transaction.");
+    } finally {
+      setVoidingId(null);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -60,9 +93,21 @@ export function TransactionList({ transactions }: TransactionListProps) {
                   <Badge variant={TYPE_BADGE[t.type] || "default"}>{t.type}</Badge>
                   <Badge variant={t.entity === "FAMILY" ? "info" : "warning"}>{t.entity}</Badge>
                 </div>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {new Date(t.date).toLocaleDateString("en-SG", { month: "short", day: "numeric" })}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {new Date(t.date).toLocaleDateString("en-SG", { month: "short", day: "numeric" })}
+                  </span>
+                  {onVoid && (
+                    <button
+                      onClick={() => handleVoid(t.id)}
+                      disabled={voidingId === t.id}
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                      title={confirmId === t.id ? "Click again to confirm" : "Void transaction"}
+                    >
+                      <Undo2 className={`h-3.5 w-3.5 ${confirmId === t.id ? "text-destructive" : ""}`} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-foreground">{t.asset}</span>
@@ -85,7 +130,8 @@ export function TransactionList({ transactions }: TransactionListProps) {
                 <th className="pb-3 pr-4 font-medium">Type</th>
                 <th className="pb-3 pr-4 font-medium">Asset</th>
                 <th className="pb-3 pr-4 text-right font-medium">Amount</th>
-                <th className="pb-3 font-medium">Note</th>
+                <th className="pb-3 pr-4 font-medium">Note</th>
+                {onVoid && <th className="pb-3 text-center font-medium">Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -114,7 +160,23 @@ export function TransactionList({ transactions }: TransactionListProps) {
                       {getAmountPrefix(t.type)}{formatNumber(Math.abs(t.amount), 0)} {t.currency}
                     </span>
                   </td>
-                  <td className="py-3 text-muted-foreground">{t.note || "-"}</td>
+                  <td className="py-3 pr-4 text-muted-foreground">{t.note || "-"}</td>
+                  {onVoid && (
+                    <td className="py-3 text-center">
+                      <Button
+                        variant={confirmId === t.id ? "destructive" : "ghost"}
+                        size="sm"
+                        onClick={() => handleVoid(t.id)}
+                        disabled={voidingId === t.id}
+                      >
+                        {voidingId === t.id
+                          ? "Voiding..."
+                          : confirmId === t.id
+                            ? "Confirm"
+                            : "Void"}
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

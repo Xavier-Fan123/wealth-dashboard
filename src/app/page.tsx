@@ -14,116 +14,7 @@ import { BalanceItemManager } from "@/components/dashboard/balance-item-manager"
 import { ReconciliationPanel } from "@/components/dashboard/reconciliation-panel";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, Menu } from "lucide-react";
-
-interface DashboardData {
-  totalNetWorth: number;
-  familyNetWorth: number;
-  companyLiquidity: number;
-  companyCashBalance: number;
-  companyCashCurrency: string;
-  avgMonthlyBurn: number;
-  cashRunway: number | null;
-  companyMonthlyOutflow: Array<{ month: string; label: string; amountSGD: number }>;
-  allocation: Array<{ name: string; value: number; color: string }>;
-  balanceSheet: {
-    asOf: string;
-    family: {
-      assets: Array<{ name: string; value: number }>;
-      liabilities: Array<{ name: string; value: number }>;
-      totalAssets: number;
-      totalLiabilities: number;
-      equity: number;
-    };
-    company: {
-      assets: Array<{ name: string; value: number }>;
-      liabilities: Array<{ name: string; value: number }>;
-      totalAssets: number;
-      totalLiabilities: number;
-      equity: number;
-    };
-    consolidated: {
-      assets: Array<{ name: string; value: number }>;
-      liabilities: Array<{ name: string; value: number }>;
-      totalAssets: number;
-      totalLiabilities: number;
-      equity: number;
-    };
-  };
-  balanceItems: Array<{
-    id: string;
-    entity: string;
-    name: string;
-    type: string;
-    amount: number;
-    currency: string;
-    dueDate: string | null;
-    note: string | null;
-    valueSGD: number;
-  }>;
-  reconciliation: {
-    checkedAt: string;
-    status: "ok" | "warning";
-    cashMismatches: Array<{
-      id: string;
-      entity: string;
-      name: string;
-      currency: string;
-      actual: number;
-      expected: number;
-      diff: number;
-    }>;
-    holdingMismatches: Array<{
-      entity: string;
-      ticker: string;
-      expectedShares: number;
-      actualShares: number;
-      shareDiff: number;
-      expectedAvgCost: number;
-      actualAvgCost: number;
-      avgCostDiff: number;
-    }>;
-  };
-  holdings: Array<{
-    id: string;
-    entity: string;
-    asset: string;
-    ticker: string;
-    shares: number;
-    avgCost: number;
-    currency: string;
-    currentPrice: number;
-    marketValue: number;
-    marketValueSGD: number;
-    costBasis: number;
-    unrealizedPL: number;
-    unrealizedPLPercent: number;
-    change: number;
-    changePercent: number;
-  }>;
-  manualAssets: Array<{
-    id: string;
-    entity: string;
-    name: string;
-    balance: number;
-    currency: string;
-    category: string;
-    valueSGD: number;
-  }>;
-  transactions: Array<{
-    id: string;
-    date: string;
-    entity: string;
-    asset: string;
-    currency: string;
-    amount: number;
-    units: number | null;
-    price: number | null;
-    type: string;
-    note: string | null;
-  }>;
-  fxRates: { USDSGD: number; CNYSGD: number };
-  quotes: Record<string, { ticker: string; price: number; change: number; changePercent: number }>;
-}
+import type { DashboardData } from "@/types/dashboard";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -258,7 +149,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {activeSection === "transactions" && <TransactionList transactions={data.transactions} />}
+        {activeSection === "transactions" && (
+          <TransactionList transactions={data.transactions} onVoid={fetchData} />
+        )}
       </main>
 
       <TransactionForm

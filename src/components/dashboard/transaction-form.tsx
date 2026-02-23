@@ -58,6 +58,7 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
   const [entity, setEntity] = useState("FAMILY");
   const [type, setType] = useState("BUY");
   const [assetIndex, setAssetIndex] = useState(0);
+  const [toAccountIndex, setToAccountIndex] = useState(0);
   const [amount, setAmount] = useState("");
   const [units, setUnits] = useState("");
   const [price, setPrice] = useState("");
@@ -75,6 +76,7 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
   });
 
   const isTradeType = type === "BUY" || type === "SELL";
+  const isTransfer = type === "TRANSFER";
 
   useEffect(() => {
     if (!open) return;
@@ -149,8 +151,20 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
     );
   }, [catalog.holdings, catalog.manualAssets, entity, isTradeType]);
 
+  const transferDestinations = useMemo(() => {
+    if (!isTransfer) return [];
+    const selectedSource = assets[assetIndex];
+    if (!selectedSource) return [];
+    return dedupeOptions(
+      catalog.manualAssets
+        .filter((a) => a.currency === selectedSource.currency && a.name !== selectedSource.label)
+        .map((a) => ({ label: `${a.entity} - ${a.name}`, currency: a.currency }))
+    );
+  }, [catalog.manualAssets, isTransfer, assets, assetIndex]);
+
   useEffect(() => {
     setAssetIndex(0);
+    setToAccountIndex(0);
   }, [entity, type]);
 
   useEffect(() => {
@@ -159,9 +173,16 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
     }
   }, [assetIndex, assets.length]);
 
+  useEffect(() => {
+    if (toAccountIndex >= transferDestinations.length) {
+      setToAccountIndex(0);
+    }
+  }, [toAccountIndex, transferDestinations.length]);
+
   if (!open) return null;
 
   const selectedAsset = assets[assetIndex];
+  const selectedDest = transferDestinations[toAccountIndex];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -187,6 +208,12 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
       if (isTradeType && units && price) {
         body.units = parseFloat(units);
         body.price = parseFloat(price);
+      }
+      if (isTransfer && selectedDest) {
+        const destLabel = selectedDest.label;
+        const dashIndex = destLabel.indexOf(" - ");
+        body.toEntity = destLabel.slice(0, dashIndex);
+        body.toAccount = destLabel.slice(dashIndex + 3);
       }
 
       const res = await fetch("/api/transactions", {
@@ -247,13 +274,16 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
                   <option value="SELL">Sell</option>
                   <option value="DEPOSIT">Deposit</option>
                   <option value="WITHDRAW">Withdraw</option>
+                  <option value="TRANSFER">Transfer</option>
                 </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">Asset / Account</label>
+                <label className="mb-1.5 block text-sm text-muted-foreground">
+                  {isTransfer ? "From Account" : "Asset / Account"}
+                </label>
                 <Select
                   value={String(assetIndex)}
                   onChange={(e) => setAssetIndex(Number(e.target.value))}
@@ -267,11 +297,38 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
                   ))}
                 </Select>
               </div>
+              {isTransfer ? (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">To Account</label>
+                  <Select
+                    value={String(toAccountIndex)}
+                    onChange={(e) => setToAccountIndex(Number(e.target.value))}
+                    disabled={loadingCatalog || transferDestinations.length === 0}
+                  >
+                    {transferDestinations.length === 0 && (
+                      <option value="0">No matching account</option>
+                    )}
+                    {transferDestinations.map((dest, i) => (
+                      <option key={`${dest.label}-${i}`} value={i}>
+                        {dest.label} ({dest.currency})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block text-sm text-muted-foreground">Date</label>
+                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+              )}
+            </div>
+
+            {isTransfer && (
               <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">Date</label>
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
-            </div>
+            )}
 
             {isTradeType && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

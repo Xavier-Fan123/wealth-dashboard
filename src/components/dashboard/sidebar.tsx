@@ -9,6 +9,7 @@ import {
   ScrollText,
   TrendingUp,
   DollarSign,
+  Download,
   X,
 } from "lucide-react";
 
@@ -85,8 +86,28 @@ export function Sidebar({ activeSection, onNavigate, open, onClose }: SidebarPro
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-border p-4">
+        {/* Export & Footer */}
+        <div className="border-t border-border p-4 space-y-3">
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Export CSV</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: "Transactions", type: "transactions" },
+                { label: "Holdings", type: "holdings" },
+                { label: "Balance", type: "balance-items" },
+              ].map((item) => (
+                <a
+                  key={item.type}
+                  href={`/api/export?type=${item.type}`}
+                  download
+                  className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-xs text-muted-foreground hover:bg-accent/80 hover:text-foreground transition-colors"
+                >
+                  <Download className="h-3 w-3" />
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <DollarSign className="h-3 w-3" />
             <span>Base Currency: SGD</span>

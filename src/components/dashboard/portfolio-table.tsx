@@ -3,34 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
-
-interface HoldingDetail {
-  id: string;
-  entity: string;
-  asset: string;
-  ticker: string;
-  shares: number;
-  avgCost: number;
-  currency: string;
-  currentPrice: number;
-  marketValue: number;
-  marketValueSGD: number;
-  costBasis: number;
-  unrealizedPL: number;
-  unrealizedPLPercent: number;
-  change: number;
-  changePercent: number;
-}
-
-interface ManualAssetDetail {
-  id: string;
-  entity: string;
-  name: string;
-  balance: number;
-  currency: string;
-  category: string;
-  valueSGD: number;
-}
+import type { HoldingDetail, ManualAssetDetail } from "@/types/dashboard";
 
 interface PortfolioTableProps {
   holdings: HoldingDetail[];

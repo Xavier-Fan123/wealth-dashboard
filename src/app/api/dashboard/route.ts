@@ -28,6 +28,10 @@ function roundValue(value: number): number {
   return Math.round(value);
 }
 
+function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function normalizeTicker(asset: string): string {
   const normalized = asset.trim().toUpperCase();
   if (normalized === "GOLD ETF") return "GLD";
@@ -53,10 +57,17 @@ function buildBalanceSection(assets: BalanceLine[], liabilities: BalanceLine[]):
 
 export async function GET() {
   try {
-    const [holdings, manualAssets, transactions, balanceItems, fxRates] = await Promise.all([
+    const [holdings, manualAssets, allTransactions, recentTransactions, balanceItems, fxRates] = await Promise.all([
       prisma.holding.findMany(),
       prisma.manualAsset.findMany(),
-      prisma.transaction.findMany({ orderBy: { date: "desc" } }),
+      prisma.transaction.findMany({
+        orderBy: { date: "desc" },
+        select: { id: true, date: true, entity: true, asset: true, currency: true, amount: true, units: true, price: true, type: true },
+      }),
+      prisma.transaction.findMany({
+        orderBy: { date: "desc" },
+        take: 20,
+      }),
       prisma.balanceItem.findMany({ orderBy: [{ entity: "asc" }, { type: "asc" }, { createdAt: "desc" }] }),
       getFxRates(),
     ]);
@@ -143,13 +154,12 @@ export async function GET() {
     const familyNetWorth = familyAssetValue - familyLiabilityValue;
     const companyAssetValue = companyInvestmentValue + companyCashValue + companyReceivableValue;
     const companyNetWorth = companyAssetValue - companyLiabilityValue;
-    const companyValue = companyAssetValue;
+    const companyLiquidity = companyCashValue;
     const totalNetWorth = familyNetWorth + companyNetWorth;
 
-    const companyOutflows = transactions.filter(
+    const companyOutflows = allTransactions.filter(
       (transaction) =>
-        transaction.entity === "COMPANY" &&
-        (transaction.type === "WITHDRAW" || transaction.type === "BUY")
+        transaction.entity === "COMPANY" && transaction.type === "WITHDRAW"
     );
     const monthlyBurnSGD: Record<string, number> = {};
     for (const transaction of companyOutflows) {
@@ -181,7 +191,8 @@ export async function GET() {
       { name: "Family Commodities", value: roundValue(familyCommodityValue), color: "#f59e0b" },
       { name: "Family Cash", value: roundValue(familyCashValue), color: "#10b981" },
       { name: "Receivables", value: roundValue(familyReceivableValue + companyReceivableValue), color: "#22c55e" },
-      { name: "Company Assets", value: roundValue(companyValue), color: "#3b82f6" },
+      { name: "Company Cash", value: roundValue(companyCashValue), color: "#3b82f6" },
+      { name: "Company Investments", value: roundValue(companyInvestmentValue), color: "#8b5cf6" },
     ];
 
     const familySection = buildBalanceSection(
@@ -247,7 +258,7 @@ export async function GET() {
     }
 
     const expectedHoldingMap = new Map<string, ReplayedHolding>();
-    const transactionsAsc = [...transactions].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const transactionsAsc = [...allTransactions].sort((a, b) => a.date.getTime() - b.date.getTime());
     for (const transaction of transactionsAsc) {
       const ticker = normalizeTicker(transaction.asset);
       const key = `${transaction.entity}|${ticker}`;
@@ -377,7 +388,7 @@ export async function GET() {
     return NextResponse.json({
       totalNetWorth,
       familyNetWorth,
-      companyLiquidity: companyValue,
+      companyLiquidity,
       companyCashBalance,
       companyCashCurrency,
       avgMonthlyBurn: roundValue(avgMonthlyBurnSGD),
@@ -389,14 +400,16 @@ export async function GET() {
       balanceItems: balanceItemDetails,
       holdings: holdingDetails,
       manualAssets: manualAssetDetails,
-      transactions: transactions.slice(0, 20),
+      transactions: recentTransactions,
       fxRates,
       quotes,
     });
   } catch (error) {
     console.error("Dashboard API error:", error);
     const message = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : "";
-    return NextResponse.json({ error: "Failed to load dashboard data", message, stack }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load dashboard data", message },
+      { status: 500 }
+    );
   }
 }

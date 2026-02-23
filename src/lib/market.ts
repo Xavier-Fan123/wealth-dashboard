@@ -10,7 +10,31 @@ export interface QuoteResult {
   currency: string;
 }
 
+// --- In-memory cache ---
+
+interface CacheEntry<T> {
+  data: T;
+  expiry: number;
+}
+
+const QUOTE_CACHE_TTL = 5 * 60 * 1000;  // 5 minutes
+const FX_CACHE_TTL = 15 * 60 * 1000;    // 15 minutes
+
+let quotesCache: CacheEntry<Record<string, QuoteResult>> | null = null;
+let fxCache: CacheEntry<FxRates> | null = null;
+
+function isCacheValid<T>(entry: CacheEntry<T> | null): entry is CacheEntry<T> {
+  return entry !== null && Date.now() < entry.expiry;
+}
+
 export async function getQuotes(tickers: string[]): Promise<Record<string, QuoteResult>> {
+  const cacheKey = [...tickers].sort().join(",");
+  if (isCacheValid(quotesCache)) {
+    const cached = quotesCache.data;
+    const allPresent = tickers.every((t) => t in cached);
+    if (allPresent) return cached;
+  }
+
   const results: Record<string, QuoteResult> = {};
 
   await Promise.all(
@@ -38,6 +62,7 @@ export async function getQuotes(tickers: string[]): Promise<Record<string, Quote
     })
   );
 
+  quotesCache = { data: results, expiry: Date.now() + QUOTE_CACHE_TTL };
   return results;
 }
 
@@ -47,6 +72,10 @@ export interface FxRates {
 }
 
 export async function getFxRates(): Promise<FxRates> {
+  if (isCacheValid(fxCache)) {
+    return fxCache.data;
+  }
+
   try {
     const res = await fetch("https://api.frankfurter.app/latest?from=USD&to=SGD,CNY");
     const data = await res.json();
@@ -55,10 +84,9 @@ export async function getFxRates(): Promise<FxRates> {
     // CNY to SGD = USD to SGD / USD to CNY
     const cnyToSgd = usdToSgd / usdToCny;
 
-    return {
-      USDSGD: usdToSgd,
-      CNYSGD: cnyToSgd,
-    };
+    const rates: FxRates = { USDSGD: usdToSgd, CNYSGD: cnyToSgd };
+    fxCache = { data: rates, expiry: Date.now() + FX_CACHE_TTL };
+    return rates;
   } catch (err) {
     console.error("Failed to fetch FX rates:", err);
     return { USDSGD: 1.35, CNYSGD: 0.186 };

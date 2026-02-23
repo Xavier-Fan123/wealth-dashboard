@@ -7,21 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-
-interface BalanceItem {
-  id: string;
-  entity: string;
-  name: string;
-  type: string;
-  amount: number;
-  currency: string;
-  dueDate: string | null;
-  note: string | null;
-  valueSGD: number;
-}
+import type { BalanceItemDetail } from "@/types/dashboard";
 
 interface BalanceItemManagerProps {
-  items: BalanceItem[];
+  items: BalanceItemDetail[];
   onChanged: () => void;
 }
 
@@ -81,7 +70,7 @@ export function BalanceItemManager({ items, onChanged }: BalanceItemManagerProps
     }
   }
 
-  async function saveAmount(item: BalanceItem) {
+  async function saveAmount(item: BalanceItemDetail) {
     setError(null);
     setLoading(true);
     try {

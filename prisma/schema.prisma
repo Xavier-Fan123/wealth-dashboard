@@ -18,6 +18,8 @@ model Holding {
   currency  String   // USD, SGD, CNY
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([entity, ticker])
 }
 
 // Manual assets that are not auto-priced (cash accounts, etc.)
@@ -30,6 +32,8 @@ model ManualAsset {
   category  String   // CASH_EQUIVALENT, CORPORATE_CASH
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([entity, name])
 }
 
 // Capital flow transactions

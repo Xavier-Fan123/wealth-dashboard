@@ -6,6 +6,7 @@ import {
   Briefcase,
   Building2,
   ArrowRightLeft,
+  ScrollText,
   TrendingUp,
   DollarSign,
   X,
@@ -15,6 +16,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "Overview", id: "overview" },
   { icon: Briefcase, label: "Family Portfolio", id: "portfolio" },
   { icon: Building2, label: "Corporate Liquidity", id: "corporate" },
+  { icon: ScrollText, label: "Statements", id: "statements" },
   { icon: ArrowRightLeft, label: "Capital Flows", id: "transactions" },
 ];
 

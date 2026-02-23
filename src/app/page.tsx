@@ -9,6 +9,9 @@ import { CorporateBoard } from "@/components/dashboard/corporate-board";
 import { TransactionForm } from "@/components/dashboard/transaction-form";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { FxTicker } from "@/components/dashboard/fx-ticker";
+import { BalanceSheet } from "@/components/dashboard/balance-sheet";
+import { BalanceItemManager } from "@/components/dashboard/balance-item-manager";
+import { ReconciliationPanel } from "@/components/dashboard/reconciliation-panel";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, Menu } from "lucide-react";
 
@@ -20,7 +23,66 @@ interface DashboardData {
   companyCashCurrency: string;
   avgMonthlyBurn: number;
   cashRunway: number | null;
+  companyMonthlyOutflow: Array<{ month: string; label: string; amountSGD: number }>;
   allocation: Array<{ name: string; value: number; color: string }>;
+  balanceSheet: {
+    asOf: string;
+    family: {
+      assets: Array<{ name: string; value: number }>;
+      liabilities: Array<{ name: string; value: number }>;
+      totalAssets: number;
+      totalLiabilities: number;
+      equity: number;
+    };
+    company: {
+      assets: Array<{ name: string; value: number }>;
+      liabilities: Array<{ name: string; value: number }>;
+      totalAssets: number;
+      totalLiabilities: number;
+      equity: number;
+    };
+    consolidated: {
+      assets: Array<{ name: string; value: number }>;
+      liabilities: Array<{ name: string; value: number }>;
+      totalAssets: number;
+      totalLiabilities: number;
+      equity: number;
+    };
+  };
+  balanceItems: Array<{
+    id: string;
+    entity: string;
+    name: string;
+    type: string;
+    amount: number;
+    currency: string;
+    dueDate: string | null;
+    note: string | null;
+    valueSGD: number;
+  }>;
+  reconciliation: {
+    checkedAt: string;
+    status: "ok" | "warning";
+    cashMismatches: Array<{
+      id: string;
+      entity: string;
+      name: string;
+      currency: string;
+      actual: number;
+      expected: number;
+      diff: number;
+    }>;
+    holdingMismatches: Array<{
+      entity: string;
+      ticker: string;
+      expectedShares: number;
+      actualShares: number;
+      shareDiff: number;
+      expectedAvgCost: number;
+      actualAvgCost: number;
+      avgCostDiff: number;
+    }>;
+  };
   holdings: Array<{
     id: string;
     entity: string;
@@ -116,7 +178,6 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 p-4 md:ml-64 md:p-8">
-        {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -130,6 +191,7 @@ export default function DashboardPage() {
                 {activeSection === "overview" && "Global Macro Overview"}
                 {activeSection === "portfolio" && "Family Portfolio"}
                 {activeSection === "corporate" && "Corporate Liquidity"}
+                {activeSection === "statements" && "Financial Statements"}
                 {activeSection === "transactions" && "Capital Flows"}
               </h1>
               <p className="text-xs text-muted-foreground sm:text-sm">
@@ -152,7 +214,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Overview Section */}
         {activeSection === "overview" && (
           <div className="space-y-6">
             <KPICards
@@ -162,21 +223,20 @@ export default function DashboardPage() {
               cashRunway={data.cashRunway}
             />
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <AllocationChart data={data.allocation} totalNetWorth={data.totalNetWorth} />
+              <AllocationChart data={data.allocation} />
               <TransactionList transactions={data.transactions.slice(0, 8)} />
             </div>
             <PortfolioTable holdings={data.holdings} manualAssets={data.manualAssets} />
+            <ReconciliationPanel data={data.reconciliation} />
           </div>
         )}
 
-        {/* Portfolio Section */}
         {activeSection === "portfolio" && (
           <div className="space-y-6">
             <PortfolioTable holdings={data.holdings} manualAssets={data.manualAssets} />
           </div>
         )}
 
-        {/* Corporate Section */}
         {activeSection === "corporate" && (
           <CorporateBoard
             companyCashBalance={data.companyCashBalance}
@@ -184,14 +244,21 @@ export default function DashboardPage() {
             companyLiquidity={data.companyLiquidity}
             avgMonthlyBurn={data.avgMonthlyBurn}
             cashRunway={data.cashRunway}
-            transactions={data.transactions}
+            companyMonthlyOutflow={data.companyMonthlyOutflow}
           />
         )}
 
-        {/* Transactions Section */}
-        {activeSection === "transactions" && (
-          <TransactionList transactions={data.transactions} />
+        {activeSection === "statements" && (
+          <div className="space-y-6">
+            <BalanceSheet data={data.balanceSheet} />
+            <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+              <BalanceItemManager items={data.balanceItems} onChanged={fetchData} />
+              <ReconciliationPanel data={data.reconciliation} />
+            </div>
+          </div>
         )}
+
+        {activeSection === "transactions" && <TransactionList transactions={data.transactions} />}
       </main>
 
       <TransactionForm

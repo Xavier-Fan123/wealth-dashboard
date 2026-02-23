@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "security:scan": "node scripts/security-scan.mjs",
+    "security:env": "node scripts/check-security-env.mjs",
+    "security:env:strict": "node scripts/check-security-env.mjs --require-basic-auth"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",

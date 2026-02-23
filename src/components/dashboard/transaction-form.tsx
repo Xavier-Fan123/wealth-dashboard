@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -13,18 +13,46 @@ interface TransactionFormProps {
   onSubmit: () => void;
 }
 
-const ASSET_OPTIONS: Record<string, { label: string; ticker?: string; currency: string }[]> = {
+interface HoldingRecord {
+  entity: string;
+  asset: string;
+  ticker: string;
+  currency: string;
+}
+
+interface ManualAssetRecord {
+  entity: string;
+  name: string;
+  currency: string;
+}
+
+interface AssetOption {
+  label: string;
+  ticker?: string;
+  currency: string;
+}
+
+const DEFAULT_TRADE_OPTIONS: Record<string, AssetOption[]> = {
   FAMILY: [
     { label: "VOO", ticker: "VOO", currency: "USD" },
     { label: "QQQ", ticker: "QQQ", currency: "USD" },
     { label: "Gold ETF", ticker: "GLD", currency: "USD" },
-    { label: "USD Cash", currency: "USD" },
-    { label: "CNY Cash", currency: "CNY" },
   ],
-  COMPANY: [
-    { label: "Company Bank Balance", currency: "SGD" },
-  ],
+  COMPANY: [],
 };
+
+function dedupeOptions(options: AssetOption[]): AssetOption[] {
+  const seen = new Set<string>();
+  const deduped: AssetOption[] = [];
+  for (const option of options) {
+    const key = `${option.label}|${option.ticker || ""}|${option.currency}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(option);
+    }
+  }
+  return deduped;
+}
 
 export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProps) {
   const [entity, setEntity] = useState("FAMILY");
@@ -36,15 +64,114 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<{
+    holdings: HoldingRecord[];
+    manualAssets: ManualAssetRecord[];
+  }>({
+    holdings: [],
+    manualAssets: [],
+  });
+
+  const isTradeType = type === "BUY" || type === "SELL";
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    async function fetchCatalog() {
+      setLoadingCatalog(true);
+      try {
+        const [holdingsRes, manualAssetsRes] = await Promise.all([
+          fetch("/api/holdings"),
+          fetch("/api/manual-assets"),
+        ]);
+        if (!holdingsRes.ok || !manualAssetsRes.ok) {
+          throw new Error("Failed to load asset catalog.");
+        }
+
+        const [holdingsJson, manualAssetsJson] = await Promise.all([
+          holdingsRes.json(),
+          manualAssetsRes.json(),
+        ]);
+
+        if (!cancelled) {
+          setCatalog({
+            holdings: (holdingsJson as HoldingRecord[]).map((item) => ({
+              entity: item.entity,
+              asset: item.asset,
+              ticker: item.ticker,
+              currency: item.currency,
+            })),
+            manualAssets: (manualAssetsJson as ManualAssetRecord[]).map((item) => ({
+              entity: item.entity,
+              name: item.name,
+              currency: item.currency,
+            })),
+          });
+        }
+      } catch (fetchError) {
+        console.error("Failed to load transaction catalog:", fetchError);
+      } finally {
+        if (!cancelled) {
+          setLoadingCatalog(false);
+        }
+      }
+    }
+
+    fetchCatalog();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const assets = useMemo(() => {
+    if (isTradeType) {
+      const defaultOptions = DEFAULT_TRADE_OPTIONS[entity] ?? [];
+      const holdingOptions = catalog.holdings
+        .filter((holding) => holding.entity === entity)
+        .map((holding) => ({
+          label: holding.asset,
+          ticker: holding.ticker,
+          currency: holding.currency,
+        }));
+      return dedupeOptions([...defaultOptions, ...holdingOptions]);
+    }
+
+    return dedupeOptions(
+      catalog.manualAssets
+        .filter((asset) => asset.entity === entity)
+        .map((asset) => ({
+          label: asset.name,
+          currency: asset.currency,
+        }))
+    );
+  }, [catalog.holdings, catalog.manualAssets, entity, isTradeType]);
+
+  useEffect(() => {
+    setAssetIndex(0);
+  }, [entity, type]);
+
+  useEffect(() => {
+    if (assetIndex >= assets.length) {
+      setAssetIndex(0);
+    }
+  }, [assetIndex, assets.length]);
 
   if (!open) return null;
 
-  const assets = ASSET_OPTIONS[entity] || [];
-  const selectedAsset = assets[assetIndex] || assets[0];
-  const isTradeType = type === "BUY" || type === "SELL";
+  const selectedAsset = assets[assetIndex];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+
+    if (!selectedAsset) {
+      setError("No valid account/asset available for this transaction type.");
+      return;
+    }
+
     setLoading(true);
     try {
       const body: Record<string, unknown> = {
@@ -68,16 +195,22 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
         body: JSON.stringify(body),
       });
 
-      if (res.ok) {
-        setAmount("");
-        setUnits("");
-        setPrice("");
-        setNote("");
-        onSubmit();
-        onClose();
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => null);
+        setError(errorBody?.error || "Failed to log transaction.");
+        return;
       }
+
+      setAmount("");
+      setUnits("");
+      setPrice("");
+      setNote("");
+      setError(null);
+      onSubmit();
+      onClose();
     } catch (err) {
       console.error("Failed to submit transaction:", err);
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -97,7 +230,12 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm text-muted-foreground">Entity</label>
-                <Select value={entity} onChange={(e) => { setEntity(e.target.value); setAssetIndex(0); }}>
+                <Select
+                  value={entity}
+                  onChange={(e) => {
+                    setEntity(e.target.value);
+                  }}
+                >
                   <option value="FAMILY">Family</option>
                   <option value="COMPANY">Company</option>
                 </Select>
@@ -109,17 +247,23 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
                   <option value="SELL">Sell</option>
                   <option value="DEPOSIT">Deposit</option>
                   <option value="WITHDRAW">Withdraw</option>
-                  <option value="TRANSFER">Transfer</option>
                 </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-sm text-muted-foreground">Asset</label>
-                <Select value={assetIndex} onChange={(e) => setAssetIndex(Number(e.target.value))}>
-                  {assets.map((a, i) => (
-                    <option key={a.label} value={i}>{a.label} ({a.currency})</option>
+                <label className="mb-1.5 block text-sm text-muted-foreground">Asset / Account</label>
+                <Select
+                  value={String(assetIndex)}
+                  onChange={(e) => setAssetIndex(Number(e.target.value))}
+                  disabled={loadingCatalog || assets.length === 0}
+                >
+                  {assets.length === 0 && <option value="0">No option available</option>}
+                  {assets.map((asset, i) => (
+                    <option key={`${asset.label}-${asset.currency}-${i}`} value={i}>
+                      {asset.label} ({asset.currency})
+                    </option>
                   ))}
                 </Select>
               </div>
@@ -138,6 +282,7 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
                     step="any"
                     placeholder="e.g. 10"
                     value={units}
+                    required={isTradeType}
                     onChange={(e) => {
                       setUnits(e.target.value);
                       if (price && e.target.value) {
@@ -153,6 +298,7 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
                     step="any"
                     placeholder="e.g. 450.00"
                     value={price}
+                    required={isTradeType}
                     onChange={(e) => {
                       setPrice(e.target.value);
                       if (units && e.target.value) {
@@ -166,7 +312,7 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
 
             <div>
               <label className="mb-1.5 block text-sm text-muted-foreground">
-                Total Amount ({selectedAsset.currency})
+                Total Amount ({selectedAsset?.currency ?? "-"})
               </label>
               <Input
                 type="number"
@@ -187,11 +333,23 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
               />
             </div>
 
+            {assets.length === 0 && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+                No valid asset/account found for this entity and transaction type.
+              </div>
+            )}
+
+            {error && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || loadingCatalog || assets.length === 0}>
                 {loading ? "Submitting..." : "Log Transaction"}
               </Button>
             </div>

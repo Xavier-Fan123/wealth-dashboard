@@ -12,7 +12,6 @@ interface AllocationItem {
 
 interface AllocationChartProps {
   data: AllocationItem[];
-  totalNetWorth: number;
 }
 
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: AllocationItem }> }) {
@@ -28,7 +27,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
   return null;
 }
 
-export function AllocationChart({ data, totalNetWorth }: AllocationChartProps) {
+export function AllocationChart({ data }: AllocationChartProps) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (

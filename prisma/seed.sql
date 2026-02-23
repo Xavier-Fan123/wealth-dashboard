@@ -2,6 +2,7 @@
 DELETE FROM "Transaction";
 DELETE FROM "ManualAsset";
 DELETE FROM "Holding";
+DELETE FROM "BalanceItem";
 
 -- Family Holdings
 INSERT INTO "Holding" (id, entity, asset, ticker, shares, avgCost, currency, createdAt, updatedAt) VALUES
@@ -25,3 +26,9 @@ INSERT INTO "Transaction" (id, date, entity, asset, currency, amount, units, pri
 ('t7', '2025-03-01T00:00:00.000Z', 'COMPANY', 'Company Bank Balance', 'CNY', -35000, NULL, NULL, 'WITHDRAW', 'Mar operating expenses', datetime('now')),
 ('t8', '2025-04-01T00:00:00.000Z', 'COMPANY', 'Company Bank Balance', 'CNY', -28000, NULL, NULL, 'WITHDRAW', 'Apr operating expenses', datetime('now')),
 ('t9', '2025-05-01T00:00:00.000Z', 'COMPANY', 'Company Bank Balance', 'CNY', -27000, NULL, NULL, 'WITHDRAW', 'May operating expenses', datetime('now'));
+
+-- Balance sheet entries (liability / receivable / payable)
+INSERT INTO "BalanceItem" (id, entity, name, type, amount, currency, dueDate, note, createdAt, updatedAt) VALUES
+('b1', 'FAMILY', 'Mortgage Loan', 'LIABILITY', 480000, 'SGD', '2038-12-31T00:00:00.000Z', 'Family apartment mortgage', datetime('now'), datetime('now')),
+('b2', 'COMPANY', 'Supplier Payables', 'PAYABLE', 95000, 'CNY', '2025-06-30T00:00:00.000Z', 'Open purchase invoices', datetime('now'), datetime('now')),
+('b3', 'COMPANY', 'Customer Receivables', 'RECEIVABLE', 120000, 'CNY', '2025-06-20T00:00:00.000Z', 'Wholesale receivable', datetime('now'), datetime('now'));

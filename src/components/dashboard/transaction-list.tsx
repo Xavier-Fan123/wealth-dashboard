@@ -22,12 +22,27 @@ interface TransactionListProps {
 }
 
 const TYPE_BADGE: Record<string, "success" | "destructive" | "info" | "warning" | "default"> = {
-  BUY: "success",
-  SELL: "destructive",
+  BUY: "warning",
+  SELL: "success",
   DEPOSIT: "info",
-  WITHDRAW: "warning",
+  WITHDRAW: "destructive",
   TRANSFER: "default",
 };
+
+const INFLOW_TYPES = new Set(["SELL", "DEPOSIT"]);
+const OUTFLOW_TYPES = new Set(["BUY", "WITHDRAW"]);
+
+function getAmountClass(type: string): string {
+  if (OUTFLOW_TYPES.has(type)) return "text-destructive";
+  if (INFLOW_TYPES.has(type)) return "text-success";
+  return "text-muted-foreground";
+}
+
+function getAmountPrefix(type: string): string {
+  if (OUTFLOW_TYPES.has(type)) return "-";
+  if (INFLOW_TYPES.has(type)) return "+";
+  return "";
+}
 
 export function TransactionList({ transactions }: TransactionListProps) {
   return (
@@ -51,8 +66,8 @@ export function TransactionList({ transactions }: TransactionListProps) {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-foreground">{t.asset}</span>
-                <span className={`font-mono text-sm ${t.amount >= 0 ? "text-success" : "text-destructive"}`}>
-                  {t.amount >= 0 ? "+" : ""}{formatNumber(t.amount, 0)} {t.currency}
+                <span className={`font-mono text-sm ${getAmountClass(t.type)}`}>
+                  {getAmountPrefix(t.type)}{formatNumber(Math.abs(t.amount), 0)} {t.currency}
                 </span>
               </div>
               {t.note && <p className="mt-1 text-xs text-muted-foreground">{t.note}</p>}
@@ -95,8 +110,8 @@ export function TransactionList({ transactions }: TransactionListProps) {
                   </td>
                   <td className="py-3 pr-4 text-foreground">{t.asset}</td>
                   <td className="py-3 pr-4 text-right font-mono">
-                    <span className={t.amount >= 0 ? "text-success" : "text-destructive"}>
-                      {t.amount >= 0 ? "+" : ""}{formatNumber(t.amount, 0)} {t.currency}
+                    <span className={getAmountClass(t.type)}>
+                      {getAmountPrefix(t.type)}{formatNumber(Math.abs(t.amount), 0)} {t.currency}
                     </span>
                   </td>
                   <td className="py-3 text-muted-foreground">{t.note || "-"}</td>

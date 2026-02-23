@@ -1,12 +1,20 @@
+import "dotenv/config";
 import { createClient } from "@libsql/client";
 
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoAuthToken = process.env.TURSO_AUTH_TOKEN;
+const allowSeedReset = process.env.ALLOW_SEED_RESET === "1";
+
+if (!tursoUrl || !tursoAuthToken) {
+  throw new Error("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN in environment variables.");
+}
+
 const client = createClient({
-  url: "libsql://wealth-dashboard-xavier-fan123.aws-ap-northeast-1.turso.io",
-  authToken: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzE2Nzk2MDMsImlkIjoiYjE0ODJmYzYtYjEyZS00ZGRhLTkyZmQtMTJmYzljNDUxMWZhIiwicmlkIjoiNzlhNTUyZWQtODQwNS00ZTUwLTk0N2UtNzU2ZDM1YmRiOTMxIn0.WuPDbxWlLkJu4j13TsM0xoyZVO0RoiQOvnhsL9jBaMQBBUg1v3c9pcIhp5ugbHaHe7ecPr8uCN6fmQe92jUyBA",
+  url: tursoUrl,
+  authToken: tursoAuthToken,
 });
 
-// Create tables matching Prisma schema
-const statements = [
+const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS "Holding" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "entity" TEXT NOT NULL,
@@ -41,10 +49,25 @@ const statements = [
     "note" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
-  // Seed data
+  `CREATE TABLE IF NOT EXISTS "BalanceItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "entity" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "amount" REAL NOT NULL,
+    "currency" TEXT NOT NULL,
+    "dueDate" DATETIME,
+    "note" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+  )`,
+];
+
+const seedResetStatements = [
   `DELETE FROM "Transaction"`,
   `DELETE FROM "ManualAsset"`,
   `DELETE FROM "Holding"`,
+  `DELETE FROM "BalanceItem"`,
   `INSERT INTO "Holding" (id, entity, asset, ticker, shares, avgCost, currency, createdAt, updatedAt) VALUES
     ('h1', 'FAMILY', 'VOO', 'VOO', 19, 634.02, 'USD', datetime('now'), datetime('now')),
     ('h2', 'FAMILY', 'QQQ', 'QQQ', 16, 608.81, 'USD', datetime('now'), datetime('now'))`,
@@ -58,9 +81,19 @@ const statements = [
     ('t3', '2026-02-21T00:00:00.000Z', 'FAMILY', 'USD Cash', 'USD', 100000, NULL, NULL, 'DEPOSIT', 'USD cash balance', datetime('now')),
     ('t4', '2026-02-21T00:00:00.000Z', 'FAMILY', 'CNY Cash', 'CNY', 200000, NULL, NULL, 'DEPOSIT', 'CNY cash balance', datetime('now')),
     ('t5', '2026-02-21T00:00:00.000Z', 'COMPANY', 'Company Bank Balance', 'SGD', 10000, NULL, NULL, 'DEPOSIT', 'Company SGD balance', datetime('now'))`,
+  `INSERT INTO "BalanceItem" (id, entity, name, type, amount, currency, dueDate, note, createdAt, updatedAt) VALUES
+    ('b1', 'FAMILY', 'Home Mortgage', 'LIABILITY', 350000, 'SGD', '2035-12-31T00:00:00.000Z', 'Outstanding principal', datetime('now'), datetime('now')),
+    ('b2', 'COMPANY', 'Supplier Payables', 'PAYABLE', 8000, 'SGD', '2026-03-31T00:00:00.000Z', 'Open supplier invoices', datetime('now'), datetime('now')),
+    ('b3', 'COMPANY', 'Customer Receivables', 'RECEIVABLE', 12000, 'SGD', '2026-03-15T00:00:00.000Z', 'Pending wholesale settlement', datetime('now'), datetime('now'))`,
 ];
 
+const statements = allowSeedReset
+  ? [...schemaStatements, ...seedResetStatements]
+  : schemaStatements;
+
 console.log("Connecting to Turso...");
+console.log(`Mode: ${allowSeedReset ? "schema + seed reset" : "schema only (safe mode)"}`);
+
 for (const sql of statements) {
   const label = sql.trim().substring(0, 60);
   try {
@@ -68,13 +101,15 @@ for (const sql of statements) {
     console.log(`OK: ${label}...`);
   } catch (err) {
     console.error(`FAIL: ${label}...`);
-    console.error(err.message);
+    console.error(err instanceof Error ? err.message : String(err));
   }
 }
 
-// Verify
-const holdings = await client.execute("SELECT count(*) as c FROM Holding");
-const assets = await client.execute("SELECT count(*) as c FROM ManualAsset");
-const txns = await client.execute("SELECT count(*) as c FROM \"Transaction\"");
-console.log(`\nVerification: ${holdings.rows[0].c} holdings, ${assets.rows[0].c} manual assets, ${txns.rows[0].c} transactions`);
-console.log("Done! Turso database is ready.");
+const holdings = await client.execute('SELECT count(*) as c FROM "Holding"');
+const assets = await client.execute('SELECT count(*) as c FROM "ManualAsset"');
+const txns = await client.execute('SELECT count(*) as c FROM "Transaction"');
+const balanceItems = await client.execute('SELECT count(*) as c FROM "BalanceItem"');
+console.log(
+  `\nVerification: ${holdings.rows[0].c} holdings, ${assets.rows[0].c} manual assets, ${txns.rows[0].c} transactions, ${balanceItems.rows[0].c} balance items`
+);
+console.log("Done! Turso database setup completed.");

@@ -98,8 +98,7 @@ Dark theme using Tailwind v4 `@theme inline` block with CSS variables:
 ## Current Portfolio Data
 - **VOO**: 19 shares (avg cost $634.02)
 - **QQQ**: 16 shares (avg cost $608.81)
-- **USD Cash**: $100,000
-- **CNY Cash**: ¥200,000
+- **USD Cash**: $110,000
 - **Company Bank (SGD)**: S$10,000
 
 ## Local Development

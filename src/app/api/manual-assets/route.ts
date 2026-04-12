@@ -7,26 +7,12 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  try {
-    const body = await req.json();
-
-    const id = String(body.id ?? "").trim();
-    const balance = Number(body.balance);
-
-    if (!id) {
-      return NextResponse.json({ error: "ID is required." }, { status: 400 });
-    }
-    if (!Number.isFinite(balance) || balance < 0) {
-      return NextResponse.json({ error: "Balance must be a non-negative number." }, { status: 400 });
-    }
-
-    const asset = await prisma.manualAsset.update({
-      where: { id },
-      data: { balance },
-    });
-    return NextResponse.json(asset);
-  } catch (error) {
-    console.error("Failed to update manual asset:", error);
-    return NextResponse.json({ error: "Failed to update manual asset." }, { status: 500 });
-  }
+  void req;
+  return NextResponse.json(
+    {
+      error:
+        "Manual asset balances cannot be edited directly. Use /api/transactions with DEPOSIT, WITHDRAW, or TRANSFER so the cash ledger stays in sync.",
+    },
+    { status: 405 }
+  );
 }

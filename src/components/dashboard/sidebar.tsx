@@ -58,7 +58,7 @@ export function Sidebar({ activeSection, onNavigate, open, onClose }: SidebarPro
               <TrendingUp className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-foreground">WealthPulse</h1>
+              <h1 className="text-sm font-semibold text-foreground">X Wealth</h1>
               <p className="text-xs text-muted-foreground">Family & Corporate</p>
             </div>
           </div>

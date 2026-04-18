@@ -1,4 +1,4 @@
-# WealthPulse Dashboard
+# X Wealth Dashboard
 
 Family + small business finance dashboard with manual-entry-first workflows.
 Tracks investment holdings, cash assets, company liquidity, and FX-normalized views.

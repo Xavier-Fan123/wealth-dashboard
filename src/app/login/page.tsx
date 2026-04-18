@@ -9,7 +9,7 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Sign in · WealthPulse",
+  title: "Sign in · X Wealth",
 };
 
 function isSafeRedirect(target: string): boolean {
@@ -42,14 +42,14 @@ export default async function LoginPage({
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <Image
             src="/icons/icon-192.png"
-            alt="WealthPulse"
+            alt="X Wealth"
             width={64}
             height={64}
             className="rounded-2xl"
             priority
           />
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">WealthPulse</h1>
+            <h1 className="text-xl font-semibold tracking-tight">X Wealth</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Sign in to continue
             </p>

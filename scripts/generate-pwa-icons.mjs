@@ -21,7 +21,7 @@ function iconSvg({ size, inset = 0 }) {
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <rect width="${size}" height="${size}" fill="${BG}"/>
-  <text x="${c}" y="${c + fontSize * 0.15}" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial" font-size="${fontSize}" font-weight="800" fill="${FG}" text-anchor="middle" dominant-baseline="middle" letter-spacing="-${fontSize * 0.04}">W</text>
+  <text x="${c}" y="${c + fontSize * 0.15}" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial" font-size="${fontSize}" font-weight="800" fill="${FG}" text-anchor="middle" dominant-baseline="middle" letter-spacing="-${fontSize * 0.04}">X</text>
   <line x1="${barX1}" y1="${barY}" x2="${barX2}" y2="${barY}" stroke="${ACCENT}" stroke-width="${strokeW}" stroke-linecap="round"/>
 </svg>`;
 }

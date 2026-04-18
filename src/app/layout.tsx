@@ -13,13 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WealthPulse | Family & Corporate Dashboard",
+  title: "X Wealth | Family & Corporate Dashboard",
   description: "Consolidated wealth management dashboard for family and corporate assets",
   manifest: "/manifest.webmanifest",
-  applicationName: "WealthPulse",
+  applicationName: "X Wealth",
   appleWebApp: {
     capable: true,
-    title: "WealthPulse",
+    title: "X Wealth",
     statusBarStyle: "black-translucent",
   },
   icons: {

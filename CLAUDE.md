@@ -1,4 +1,4 @@
-# WealthPulse Dashboard
+# X Wealth Dashboard
 
 ## Project Overview
 Family & Corporate Wealth Management Dashboard. Tracks family investments (VOO, QQQ, Gold ETF, cash) and company liquidity (SGD bank balance). Base currency is **SGD** with live FX conversion.

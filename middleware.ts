@@ -1,51 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, authConfigured, verifySession } from "@/lib/auth";
 
-function unauthorizedResponse() {
-  return new NextResponse("Authentication required.", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="WealthPulse", charset="UTF-8"',
-    },
-  });
+const PUBLIC_EXACT = new Set<string>([
+  "/login",
+  "/api/login",
+  "/api/logout",
+  "/manifest.webmanifest",
+  "/apple-touch-icon.png",
+  "/favicon.ico",
+]);
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_EXACT.has(pathname)) return true;
+  if (pathname.startsWith("/icons/")) return true;
+  return false;
 }
 
-export function middleware(req: NextRequest) {
-  const expectedUser = process.env.APP_BASIC_AUTH_USER;
-  const expectedPass = process.env.APP_BASIC_AUTH_PASS;
+export async function middleware(req: NextRequest) {
+  const config = authConfigured();
+  if (!config) return NextResponse.next();
 
-  // Keep local/dev setup friction low: auth only applies when env vars are configured.
-  if (!expectedUser || !expectedPass) {
-    return NextResponse.next();
+  const { pathname, search } = req.nextUrl;
+  if (isPublicPath(pathname)) return NextResponse.next();
+
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const session = await verifySession(token, config.secret);
+  if (session) return NextResponse.next();
+
+  // API routes: return 401 JSON so fetch callers don't follow a redirect to HTML.
+  if (pathname.startsWith("/api/")) {
+    return new NextResponse(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
   }
 
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Basic ")) {
-    return unauthorizedResponse();
-  }
-
-  let decoded = "";
-  try {
-    decoded = atob(authHeader.slice(6));
-  } catch {
-    return unauthorizedResponse();
-  }
-
-  const separatorIndex = decoded.indexOf(":");
-  if (separatorIndex < 0) {
-    return unauthorizedResponse();
-  }
-
-  const username = decoded.slice(0, separatorIndex);
-  const password = decoded.slice(separatorIndex + 1);
-  if (username !== expectedUser || password !== expectedPass) {
-    return unauthorizedResponse();
-  }
-
-  return NextResponse.next();
+  // Page routes: send the user to /login with a "from" hint.
+  const loginUrl = new URL("/login", req.url);
+  loginUrl.searchParams.set("from", pathname + search);
+  return NextResponse.redirect(loginUrl, 303);
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)",
   ],
 };

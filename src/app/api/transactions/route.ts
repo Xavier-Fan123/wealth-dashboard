@@ -27,6 +27,43 @@ function toNullableString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function cashCategoryForEntity(entity: string): string {
+  return entity === "COMPANY" ? "CORPORATE_CASH" : "CASH_EQUIVALENT";
+}
+
+function formatTransferAsset(fromAccount: string, toEntity: string, toAccount: string): string {
+  return `${fromAccount} -> ${toEntity}:${toAccount}`;
+}
+
+function parseTransferAsset(asset: string): {
+  fromAccount: string;
+  toEntity: string;
+  toAccount: string;
+} | null {
+  const [fromAccount, destination] = asset.split(" -> ").map((part) => part.trim());
+  if (!fromAccount || !destination) return null;
+
+  const colonIndex = destination.indexOf(":");
+  if (colonIndex > 0) {
+    return {
+      fromAccount,
+      toEntity: destination.slice(0, colonIndex).trim().toUpperCase(),
+      toAccount: destination.slice(colonIndex + 1).trim(),
+    };
+  }
+
+  const spaceIndex = destination.indexOf(" ");
+  if (spaceIndex > 0) {
+    return {
+      fromAccount,
+      toEntity: destination.slice(0, spaceIndex).trim().toUpperCase(),
+      toAccount: destination.slice(spaceIndex + 1).trim(),
+    };
+  }
+
+  return null;
+}
+
 function normalizeText(value: unknown, fieldName: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new ApiError(`${fieldName} is required.`);
@@ -75,6 +112,7 @@ export async function POST(req: NextRequest) {
     const note = toNullableString(body.note);
     const tickerCandidate = toNullableString(body.ticker) ?? asset;
     const ticker = tickerCandidate.toUpperCase();
+    const cashCategory = cashCategoryForEntity(entity);
 
     const transaction = await prisma.$transaction(async (tx) => {
       if (type === "BUY") {
@@ -97,7 +135,7 @@ export async function POST(req: NextRequest) {
           where: {
             entity,
             currency,
-            category: entity === "COMPANY" ? "CORPORATE_CASH" : "CASH_EQUIVALENT",
+            category: cashCategory,
           },
         });
         if (!cashAccount) {
@@ -176,7 +214,7 @@ export async function POST(req: NextRequest) {
           where: {
             entity,
             currency,
-            category: entity === "COMPANY" ? "CORPORATE_CASH" : "CASH_EQUIVALENT",
+            category: cashCategory,
           },
         });
         if (!cashAccount) {
@@ -216,6 +254,9 @@ export async function POST(req: NextRequest) {
       if (type === "TRANSFER") {
         const toAccount = normalizeText(body.toAccount, "To Account");
         const toEntity = normalizeText(body.toEntity ?? entity, "To Entity").toUpperCase();
+        if (!VALID_ENTITIES.has(toEntity)) {
+          throw new ApiError("To Entity must be FAMILY or COMPANY.");
+        }
 
         const sourceAccount = await tx.manualAsset.findFirst({
           where: { entity, name: asset },
@@ -230,11 +271,19 @@ export async function POST(req: NextRequest) {
           throw new ApiError(`Insufficient balance in ${sourceAccount.name}.`);
         }
 
-        const destAccount = await tx.manualAsset.findFirst({
+        let destAccount = await tx.manualAsset.findFirst({
           where: { entity: toEntity, name: toAccount },
         });
         if (!destAccount) {
-          throw new ApiError(`Destination account "${toAccount}" not found for ${toEntity}.`);
+          destAccount = await tx.manualAsset.create({
+            data: {
+              entity: toEntity,
+              name: toAccount,
+              balance: 0,
+              currency,
+              category: cashCategoryForEntity(toEntity),
+            },
+          });
         }
         if (destAccount.currency !== currency) {
           throw new ApiError(`Currency mismatch: source is ${currency} but destination is ${destAccount.currency}.`);
@@ -253,7 +302,7 @@ export async function POST(req: NextRequest) {
           data: {
             date,
             entity,
-            asset: `${asset} → ${toEntity === entity ? "" : toEntity + " "}${toAccount}`,
+            asset: formatTransferAsset(asset, toEntity, toAccount),
             currency,
             amount,
             units: null,
@@ -264,11 +313,23 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const existing = await tx.manualAsset.findFirst({
+      let existing = await tx.manualAsset.findFirst({
         where: { entity, name: asset },
       });
       if (!existing) {
-        throw new ApiError(`Cash account "${asset}" does not exist for ${entity}.`);
+        if (type !== "DEPOSIT") {
+          throw new ApiError(`Cash account "${asset}" does not exist for ${entity}.`);
+        }
+
+        existing = await tx.manualAsset.create({
+          data: {
+            entity,
+            name: asset,
+            balance: 0,
+            currency,
+            category: cashCategory,
+          },
+        });
       }
       if (existing.currency !== currency) {
         throw new ApiError(`Currency mismatch for cash account "${asset}".`);
@@ -398,6 +459,39 @@ export async function DELETE(req: NextRequest) {
             data: { balance: cashAccount.balance + reversal },
           });
         }
+      } else if (type === "TRANSFER") {
+        const parsed = parseTransferAsset(original.asset);
+        if (!parsed || !VALID_ENTITIES.has(parsed.toEntity)) {
+          throw new ApiError("Cannot void transfer because its destination cannot be identified.");
+        }
+
+        const sourceAccount = await tx.manualAsset.findFirst({
+          where: { entity, name: parsed.fromAccount },
+        });
+        const destAccount = await tx.manualAsset.findFirst({
+          where: { entity: parsed.toEntity, name: parsed.toAccount },
+        });
+        if (!sourceAccount) {
+          throw new ApiError(`Source account "${parsed.fromAccount}" not found for ${entity}.`);
+        }
+        if (!destAccount) {
+          throw new ApiError(`Destination account "${parsed.toAccount}" not found for ${parsed.toEntity}.`);
+        }
+        if (sourceAccount.currency !== currency || destAccount.currency !== currency) {
+          throw new ApiError("Currency mismatch while voiding transfer.");
+        }
+        if (destAccount.balance < Math.abs(amount)) {
+          throw new ApiError(`Insufficient balance in ${destAccount.name} to void this transfer.`);
+        }
+
+        await tx.manualAsset.update({
+          where: { id: sourceAccount.id },
+          data: { balance: Math.round((sourceAccount.balance + Math.abs(amount)) * 100) / 100 },
+        });
+        await tx.manualAsset.update({
+          where: { id: destAccount.id },
+          data: { balance: Math.round((destAccount.balance - Math.abs(amount)) * 100) / 100 },
+        });
       }
 
       await tx.transaction.delete({ where: { id } });

@@ -130,9 +130,10 @@ export default function DashboardPage() {
 
         {activeSection === "corporate" && (
           <CorporateBoard
-            companyCashBalance={data.companyCashBalance}
-            companyCashCurrency={data.companyCashCurrency}
             companyLiquidity={data.companyLiquidity}
+            companyCashAccounts={data.manualAssets
+              .filter((asset) => asset.entity === "COMPANY" && asset.category === "CORPORATE_CASH")
+              .sort((a, b) => a.currency.localeCompare(b.currency) || a.name.localeCompare(b.name))}
             avgMonthlyBurn={data.avgMonthlyBurn}
             cashRunway={data.cashRunway}
             companyMonthlyOutflow={data.companyMonthlyOutflow}

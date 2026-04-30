@@ -38,6 +38,35 @@ function normalizeTicker(asset: string): string {
   return normalized;
 }
 
+function parseTransferAsset(asset: string): {
+  fromAccount: string;
+  toEntity: string;
+  toAccount: string;
+} | null {
+  const [fromAccount, destination] = asset.split(" -> ").map((part) => part.trim());
+  if (!fromAccount || !destination) return null;
+
+  const colonIndex = destination.indexOf(":");
+  if (colonIndex > 0) {
+    return {
+      fromAccount,
+      toEntity: destination.slice(0, colonIndex).trim().toUpperCase(),
+      toAccount: destination.slice(colonIndex + 1).trim(),
+    };
+  }
+
+  const spaceIndex = destination.indexOf(" ");
+  if (spaceIndex > 0) {
+    return {
+      fromAccount,
+      toEntity: destination.slice(0, spaceIndex).trim().toUpperCase(),
+      toAccount: destination.slice(spaceIndex + 1).trim(),
+    };
+  }
+
+  return null;
+}
+
 function formatMonthLabel(monthKey: string): string {
   const date = new Date(`${monthKey}-01T00:00:00.000Z`);
   return date.toLocaleDateString("en-SG", { month: "short", year: "2-digit" });
@@ -323,6 +352,35 @@ export async function GET() {
             cashAccount.id,
             (expectedCashById.get(cashAccount.id) ?? 0) + sign * Math.abs(transaction.amount)
           );
+        }
+      } else if (transaction.type === "TRANSFER") {
+        const transfer = parseTransferAsset(transaction.asset);
+        if (transfer) {
+          const sourceAccount = manualAssets.find(
+            (asset) =>
+              asset.entity === transaction.entity &&
+              asset.name === transfer.fromAccount &&
+              asset.currency === transaction.currency
+          );
+          const destAccount = manualAssets.find(
+            (asset) =>
+              asset.entity === transfer.toEntity &&
+              asset.name === transfer.toAccount &&
+              asset.currency === transaction.currency
+          );
+
+          if (sourceAccount) {
+            expectedCashById.set(
+              sourceAccount.id,
+              (expectedCashById.get(sourceAccount.id) ?? 0) - Math.abs(transaction.amount)
+            );
+          }
+          if (destAccount) {
+            expectedCashById.set(
+              destAccount.id,
+              (expectedCashById.get(destAccount.id) ?? 0) + Math.abs(transaction.amount)
+            );
+          }
         }
       }
     }

@@ -32,6 +32,11 @@ interface AssetOption {
   currency: string;
 }
 
+interface TransferDestinationOption extends AssetOption {
+  entity: string;
+  accountName: string;
+}
+
 const DEFAULT_TRADE_OPTIONS: Record<string, AssetOption[]> = {
   FAMILY: [
     { label: "VOO", ticker: "VOO", currency: "USD" },
@@ -39,6 +44,19 @@ const DEFAULT_TRADE_OPTIONS: Record<string, AssetOption[]> = {
     { label: "Gold ETF", ticker: "GLD", currency: "USD" },
   ],
   COMPANY: [],
+};
+
+const CASH_ACCOUNT_TEMPLATES: Record<string, AssetOption[]> = {
+  FAMILY: [
+    { label: "USD Cash", currency: "USD" },
+    { label: "CNY Cash", currency: "CNY" },
+    { label: "SGD Cash", currency: "SGD" },
+  ],
+  COMPANY: [
+    { label: "Company USD Cash", currency: "USD" },
+    { label: "Company Bank Balance", currency: "SGD" },
+    { label: "Company CNY Cash", currency: "CNY" },
+  ],
 };
 
 function dedupeOptions(options: AssetOption[]): AssetOption[] {
@@ -141,26 +159,49 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
       return dedupeOptions([...defaultOptions, ...holdingOptions]);
     }
 
-    return dedupeOptions(
-      catalog.manualAssets
-        .filter((asset) => asset.entity === entity)
-        .map((asset) => ({
-          label: asset.name,
-          currency: asset.currency,
-        }))
-    );
-  }, [catalog.holdings, catalog.manualAssets, entity, isTradeType]);
+    const existingCashAccounts = catalog.manualAssets
+      .filter((asset) => asset.entity === entity)
+      .map((asset) => ({
+        label: asset.name,
+        currency: asset.currency,
+      }));
+
+    if (type === "DEPOSIT") {
+      return dedupeOptions([...existingCashAccounts, ...(CASH_ACCOUNT_TEMPLATES[entity] ?? [])]);
+    }
+
+    return dedupeOptions(existingCashAccounts);
+  }, [catalog.holdings, catalog.manualAssets, entity, isTradeType, type]);
 
   const transferDestinations = useMemo(() => {
     if (!isTransfer) return [];
     const selectedSource = assets[assetIndex];
     if (!selectedSource) return [];
-    return dedupeOptions(
-      catalog.manualAssets
-        .filter((a) => a.currency === selectedSource.currency && a.name !== selectedSource.label)
-        .map((a) => ({ label: `${a.entity} - ${a.name}`, currency: a.currency }))
+    const existingDestinations = catalog.manualAssets.map((asset) => ({
+      entity: asset.entity,
+      accountName: asset.name,
+      label: `${asset.entity} - ${asset.name}`,
+      currency: asset.currency,
+    }));
+    const templateDestinations = Object.entries(CASH_ACCOUNT_TEMPLATES).flatMap(([templateEntity, options]) =>
+      options.map((option) => ({
+        entity: templateEntity,
+        accountName: option.label,
+        label: `${templateEntity} - ${option.label}`,
+        currency: option.currency,
+      }))
     );
-  }, [catalog.manualAssets, isTransfer, assets, assetIndex]);
+    const seen = new Set<string>();
+    return [...existingDestinations, ...templateDestinations].filter((destination): destination is TransferDestinationOption => {
+      if (destination.currency !== selectedSource.currency) return false;
+      if (destination.entity === entity && destination.accountName === selectedSource.label) return false;
+
+      const key = `${destination.entity}|${destination.accountName}|${destination.currency}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [catalog.manualAssets, isTransfer, assets, assetIndex, entity]);
 
   useEffect(() => {
     setAssetIndex(0);
@@ -192,6 +233,10 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
       setError("No valid account/asset available for this transaction type.");
       return;
     }
+    if (isTransfer && !selectedDest) {
+      setError("No matching destination account is available for this transfer.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -210,10 +255,8 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
         body.price = parseFloat(price);
       }
       if (isTransfer && selectedDest) {
-        const destLabel = selectedDest.label;
-        const dashIndex = destLabel.indexOf(" - ");
-        body.toEntity = destLabel.slice(0, dashIndex);
-        body.toAccount = destLabel.slice(dashIndex + 3);
+        body.toEntity = selectedDest.entity;
+        body.toAccount = selectedDest.accountName;
       }
 
       const res = await fetch("/api/transactions", {
@@ -406,7 +449,10 @@ export function TransactionForm({ open, onClose, onSubmit }: TransactionFormProp
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading || loadingCatalog || assets.length === 0}>
+              <Button
+                type="submit"
+                disabled={loading || loadingCatalog || assets.length === 0 || (isTransfer && transferDestinations.length === 0)}
+              >
                 {loading ? "Submitting..." : "Log Transaction"}
               </Button>
             </div>

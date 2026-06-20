@@ -13,6 +13,8 @@ const PUBLIC_EXACT = new Set<string>([
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_EXACT.has(pathname)) return true;
   if (pathname.startsWith("/icons/")) return true;
+  // Cron endpoints self-authenticate via CRON_SECRET (Bearer token), not the session cookie.
+  if (pathname.startsWith("/api/cron/")) return true;
   return false;
 }
 

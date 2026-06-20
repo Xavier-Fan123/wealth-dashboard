@@ -38,6 +38,9 @@ Entity is always `FAMILY` or `COMPANY`. Categories: `CASH_EQUIVALENT`, `CORPORAT
 | `/api/holdings` | GET | Raw holdings list |
 | `/api/manual-assets` | GET, PUT | Read/update manual asset balances |
 | `/api/transactions` | GET, POST | Transaction log + auto-update holdings & cash |
+| `/api/cron/monthly-email` | GET | Build & send the monthly report email (Vercel Cron). `?dryRun=1` returns HTML preview; `?month=YYYY-MM` overrides the reported month. Requires `Authorization: Bearer ${CRON_SECRET}` |
+
+Dashboard aggregation lives in `src/lib/dashboard-data.ts` (`getDashboardData()`); both `/api/dashboard` and the monthly email reuse it so figures never diverge.
 
 ### Transaction Logic (`src/app/api/transactions/route.ts`)
 **Critical business rule**: BUY/SELL automatically adjusts cash accounts.
@@ -46,6 +49,15 @@ Entity is always `FAMILY` or `COMPANY`. Categories: `CASH_EQUIVALENT`, `CORPORAT
 - **DEPOSIT**: Only way to increase total cash (external injection)
 - **WITHDRAW**: Decreases cash account
 - Cash account mapping: `USD→"USD Cash"`, `CNY→"CNY Cash"`, `SGD→"Company Bank Balance"`
+
+### Monthly Email Report (`src/lib/monthly-report.ts`, `email-report.ts`, `email.ts`)
+Automated monthly wealth report emailed via **Resend**.
+- **Schedule**: `vercel.json` cron `0 1 1 * *` → 1st of each month, 01:00 UTC. Reports the **previous** calendar month.
+- **Data flow**: `getMonthlyReport(monthKey)` reuses `getDashboardData()` for the asset snapshot and queries that month's full transaction list separately (dashboard only returns 20). Classification (per transaction rules above): COMPANY `DEPOSIT`=income, COMPANY `WITHDRAW`=expense, `BUY/SELL/TRANSFER`=operations.
+- **Render**: `renderMonthlyEmail(report)` → inline-styled dark-theme HTML with 4 sections (Overview / Family Portfolio / Company / This Month's Activity).
+- **Send**: `sendEmail()` uses `RESEND_API_KEY`; recipients from `REPORT_EMAIL_TO`, sender from `REPORT_EMAIL_FROM`.
+- **Auth**: `/api/cron/monthly-email` is public in `middleware.ts` but self-guards with `CRON_SECRET` (Bearer). Vercel Cron injects this header automatically.
+- **Preview locally**: `GET /api/cron/monthly-email?dryRun=1&month=2026-05` with header `Authorization: Bearer <CRON_SECRET>` returns the HTML without sending.
 
 ### Market Data (`src/lib/market.ts`)
 - yahoo-finance2 v3: Must use `new YahooFinance()` then `yf.quote(ticker)` — NOT default import
@@ -89,6 +101,10 @@ Dark theme using Tailwind v4 `@theme inline` block with CSS variables:
 | `TURSO_DATABASE_URL` | `libsql://wealth-dashboard-xavier-fan123.aws-ap-northeast-1.turso.io` |
 | `TURSO_AUTH_TOKEN` | (JWT token, must be single line — no line breaks!) |
 | `DATABASE_URL` | `file:./dev.db` |
+| `RESEND_API_KEY` | Resend API key (required to send the monthly email) |
+| `REPORT_EMAIL_TO` | Comma-separated recipients (default `fanzhangxuan@outlook.com`) |
+| `REPORT_EMAIL_FROM` | Sender (default `X Wealth <onboarding@resend.dev>`; verify a domain in Resend to use your own) |
+| `CRON_SECRET` | Bearer token guarding `/api/cron/monthly-email`; Vercel Cron injects it automatically |
 
 ### Turso Database
 - Region: aws-ap-northeast-1 (Tokyo)

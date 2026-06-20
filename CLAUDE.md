@@ -51,11 +51,11 @@ Dashboard aggregation lives in `src/lib/dashboard-data.ts` (`getDashboardData()`
 - Cash account mapping: `USD→"USD Cash"`, `CNY→"CNY Cash"`, `SGD→"Company Bank Balance"`
 
 ### Monthly Email Report (`src/lib/monthly-report.ts`, `email-report.ts`, `email.ts`)
-Automated monthly wealth report emailed via **Resend**.
+Automated monthly wealth report emailed via **SMTP** (nodemailer, e.g. Gmail app password).
 - **Schedule**: `vercel.json` cron `0 1 1 * *` → 1st of each month, 01:00 UTC. Reports the **previous** calendar month.
 - **Data flow**: `getMonthlyReport(monthKey)` reuses `getDashboardData()` for the asset snapshot and queries that month's full transaction list separately (dashboard only returns 20). Classification (per transaction rules above): COMPANY `DEPOSIT`=income, COMPANY `WITHDRAW`=expense, `BUY/SELL/TRANSFER`=operations.
 - **Render**: `renderMonthlyEmail(report)` → inline-styled dark-theme HTML with 4 sections (Overview / Family Portfolio / Company / This Month's Activity).
-- **Send**: `sendEmail()` uses `RESEND_API_KEY`; recipients from `REPORT_EMAIL_TO`, sender from `REPORT_EMAIL_FROM`.
+- **Send**: `sendEmail()` uses SMTP env (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, optional `SMTP_SECURE`); recipients from `REPORT_EMAIL_TO`, sender from `REPORT_EMAIL_FROM` (defaults to `SMTP_USER`). `nodemailer` is in `serverExternalPackages`.
 - **Auth**: `/api/cron/monthly-email` is public in `middleware.ts` but self-guards with `CRON_SECRET` (Bearer). Vercel Cron injects this header automatically.
 - **Preview locally**: `GET /api/cron/monthly-email?dryRun=1&month=2026-05` with header `Authorization: Bearer <CRON_SECRET>` returns the HTML without sending.
 
@@ -101,9 +101,12 @@ Dark theme using Tailwind v4 `@theme inline` block with CSS variables:
 | `TURSO_DATABASE_URL` | `libsql://wealth-dashboard-xavier-fan123.aws-ap-northeast-1.turso.io` |
 | `TURSO_AUTH_TOKEN` | (JWT token, must be single line — no line breaks!) |
 | `DATABASE_URL` | `file:./dev.db` |
-| `RESEND_API_KEY` | Resend API key (required to send the monthly email) |
+| `SMTP_HOST` | SMTP server (Gmail: `smtp.gmail.com`) |
+| `SMTP_PORT` | SMTP port (default `465`) |
+| `SMTP_USER` | SMTP username / sending mailbox |
+| `SMTP_PASS` | SMTP password (Gmail: 16-char App Password, 2FA required) |
+| `REPORT_EMAIL_FROM` | Sender (defaults to `SMTP_USER`; most providers require it to match) |
 | `REPORT_EMAIL_TO` | Comma-separated recipients (default `fanzhangxuan@outlook.com`) |
-| `REPORT_EMAIL_FROM` | Sender (default `X Wealth <onboarding@resend.dev>`; verify a domain in Resend to use your own) |
 | `CRON_SECRET` | Bearer token guarding `/api/cron/monthly-email`; Vercel Cron injects it automatically |
 
 ### Turso Database

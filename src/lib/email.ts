@@ -1,6 +1,5 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const DEFAULT_FROM = "X Wealth <onboarding@resend.dev>";
 const DEFAULT_TO = "fanzhangxuan@outlook.com";
 
 export interface SendEmailInput {
@@ -24,31 +23,45 @@ function parseRecipients(value: string | string[] | undefined): string[] {
     .filter(Boolean);
 }
 
-/** Sends an HTML email via Resend. Throws with a clear message if misconfigured. */
+/**
+ * Sends an HTML email over SMTP (e.g. Gmail/Outlook with an app password).
+ * Config via env: SMTP_HOST, SMTP_PORT (default 465), SMTP_USER, SMTP_PASS,
+ * optional SMTP_SECURE ("true"/"false"; defaults to true on port 465).
+ * Throws with a clear message if misconfigured.
+ */
 export async function sendEmail({ subject, html, to }: SendEmailInput): Promise<SendEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY is not set — cannot send email.");
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!host || !user || !pass) {
+    throw new Error("SMTP is not configured — set SMTP_HOST, SMTP_USER and SMTP_PASS.");
   }
+
+  const port = Number(process.env.SMTP_PORT ?? 465);
+  // Port 465 uses implicit TLS; 587/25 use STARTTLS. Allow an explicit override.
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
 
   const recipients = parseRecipients(to);
   if (recipients.length === 0) {
     throw new Error("No email recipients configured (REPORT_EMAIL_TO is empty).");
   }
 
-  const from = process.env.REPORT_EMAIL_FROM || DEFAULT_FROM;
-  const resend = new Resend(apiKey);
+  // Most providers require the From address to match the authenticated user.
+  const from = process.env.REPORT_EMAIL_FROM || user;
 
-  const { data, error } = await resend.emails.send({
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  });
+
+  const info = await transporter.sendMail({
     from,
     to: recipients,
     subject,
     html,
   });
 
-  if (error) {
-    throw new Error(`Resend failed to send email: ${error.message}`);
-  }
-
-  return { id: data?.id ?? "", to: recipients };
+  return { id: info.messageId ?? "", to: recipients };
 }

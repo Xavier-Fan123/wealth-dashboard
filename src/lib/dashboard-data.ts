@@ -101,6 +101,7 @@ export async function getDashboardData() {
           units: true,
           price: true,
           type: true,
+          note: true,
         },
       }),
       prisma.transaction.findMany({
@@ -199,8 +200,12 @@ export async function getDashboardData() {
   const companyLiquidity = companyCashValue;
   const totalNetWorth = familyNetWorth + companyNetWorth;
 
+  // Exclude internal FX conversions (tagged "[FX]") — they are not real cash burn.
   const companyOutflows = allTransactions.filter(
-    (transaction) => transaction.entity === "COMPANY" && transaction.type === "WITHDRAW"
+    (transaction) =>
+      transaction.entity === "COMPANY" &&
+      transaction.type === "WITHDRAW" &&
+      !(transaction.note ?? "").startsWith("[FX]")
   );
   const monthlyBurnSGD: Record<string, number> = {};
   for (const transaction of companyOutflows) {

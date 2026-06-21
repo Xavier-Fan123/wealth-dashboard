@@ -86,14 +86,19 @@ export async function getMonthlyReport(
     amountSGD: convertToSGD(Math.abs(t.amount), t.currency, fxRates),
   }));
 
+  // Internal FX conversions are recorded as a WITHDRAW + DEPOSIT pair (the app has no
+  // cross-currency transfer). They are tagged with a leading "[FX]" note so we can keep
+  // them out of real income/expense and show them as operations instead.
+  const isFxConversion = (t: MonthlyTransaction) => (t.note ?? "").startsWith("[FX]");
+
   const companyIncome = transactions.filter(
-    (t) => t.entity === "COMPANY" && t.type === "DEPOSIT"
+    (t) => t.entity === "COMPANY" && t.type === "DEPOSIT" && !isFxConversion(t)
   );
   const companyExpenses = transactions.filter(
-    (t) => t.entity === "COMPANY" && t.type === "WITHDRAW"
+    (t) => t.entity === "COMPANY" && t.type === "WITHDRAW" && !isFxConversion(t)
   );
-  const operations = transactions.filter((t) =>
-    ["BUY", "SELL", "TRANSFER"].includes(t.type)
+  const operations = transactions.filter(
+    (t) => ["BUY", "SELL", "TRANSFER"].includes(t.type) || isFxConversion(t)
   );
 
   const companyIncomeTotalSGD = companyIncome.reduce((sum, t) => sum + t.amountSGD, 0);
